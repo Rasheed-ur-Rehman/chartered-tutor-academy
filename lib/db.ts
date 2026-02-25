@@ -1,40 +1,8 @@
 import fs from 'fs';
 import path from 'path';
 
-// Mock database for the application
-// In a real app, this would be a connection to MongoDB, PostgreSQL, etc.
-
+// Database file path
 const DATA_FILE = path.join(process.cwd(), 'data.json');
-
-function loadData() {
-  if (fs.existsSync(DATA_FILE)) {
-    try {
-      const content = fs.readFileSync(DATA_FILE, 'utf-8');
-      if (!content || content.trim() === '') return null;
-      return JSON.parse(content);
-    } catch (e) {
-      console.error('Error loading data:', e);
-      // If there's a parse error, we might want to backup the corrupted file
-      try {
-        fs.copyFileSync(DATA_FILE, `${DATA_FILE}.bak`);
-      } catch (copyError) {
-        console.error('Failed to create backup of corrupted data file:', copyError);
-      }
-    }
-  }
-  return null;
-}
-
-function saveData(data: any) {
-  try {
-    // Write to a temporary file first to avoid corruption during write
-    const tempFile = `${DATA_FILE}.tmp`;
-    fs.writeFileSync(tempFile, JSON.stringify(data, null, 2));
-    fs.renameSync(tempFile, DATA_FILE);
-  } catch (e) {
-    console.error('Error saving data:', e);
-  }
-}
 
 export type Status = 'pending' | 'approved' | 'rejected';
 
@@ -64,11 +32,11 @@ export interface Tutor {
   city: string;
   qualification: string;
   experience: string;
-  tuitionType: string[]; // Online, Face to Face
+  tuitionType: string[];
   subject: string;
-  profilePicture?: string; // Base64 or URL
-  idCardFile?: string; // Base64 or URL
-  qualificationFile?: string; // Base64 or URL
+  profilePicture?: string;
+  idCardFile?: string;
+  qualificationFile?: string;
   status: Status;
   availability: 'Open' | 'Closed';
   createdAt: string;
@@ -140,7 +108,7 @@ const initialData = {
   ] as Curriculum[],
   chats: [] as ChatMessage[],
   admin: {
-    passwordHash: 'admin123' // Simple plain text for mock demo
+    passwordHash: 'Admin'
   } as AdminConfig
 };
 
@@ -155,11 +123,30 @@ declare global {
   } | undefined;
 }
 
-const rawPersistedData = loadData();
-if (!rawPersistedData && fs.existsSync(DATA_FILE)) {
-  console.error('CRITICAL: Data file exists but could not be loaded. Data might be corrupted.');
+function loadData() {
+  if (fs.existsSync(DATA_FILE)) {
+    try {
+      const content = fs.readFileSync(DATA_FILE, 'utf-8');
+      if (!content || content.trim() === '') return null;
+      return JSON.parse(content);
+    } catch (e) {
+      console.error('Error loading data:', e);
+    }
+  }
+  return null;
 }
 
+function saveData(data: any) {
+  try {
+    const tempFile = `${DATA_FILE}.tmp`;
+    fs.writeFileSync(tempFile, JSON.stringify(data, null, 2));
+    fs.renameSync(tempFile, DATA_FILE);
+  } catch (e) {
+    console.error('Error saving data:', e);
+  }
+}
+
+const rawPersistedData = loadData();
 const persistedData = {
   ...initialData,
   ...(rawPersistedData || {}),
@@ -178,28 +165,18 @@ if (!global.__db_state) {
     chats: persistedData.chats,
     admin: persistedData.admin,
   };
-  
-  // Force update to "Admin" if it's still the old default to fix user's issue
-  if (global.__db_state.admin.passwordHash === 'admin123') {
-    global.__db_state.admin.passwordHash = 'Admin';
-    setTimeout(sync, 100);
-  }
 }
 
 function sync() {
   if (!global.__db_state) return;
-  try {
-    saveData(global.__db_state);
-  } catch (e) {
-    console.error('CRITICAL: Failed to sync data to file:', e);
-  }
+  saveData(global.__db_state);
 }
 
-// Helper functions to interact with the "DB"
+// Database API (Async to match existing API routes)
 export const db = {
   students: {
-    getAll: () => global.__db_state!.students,
-    add: (student: Omit<Student, 'id' | 'status' | 'createdAt'>) => {
+    getAll: async () => global.__db_state!.students,
+    add: async (student: Omit<Student, 'id' | 'status' | 'createdAt'>) => {
       const newStudent: Student = {
         ...student,
         id: Math.random().toString(36).substr(2, 9),
@@ -210,18 +187,18 @@ export const db = {
       sync();
       return newStudent;
     },
-    updateStatus: (id: string, status: Status) => {
+    updateStatus: async (id: string, status: Status) => {
       const student = global.__db_state!.students.find(s => s.id === id);
       if (student) {
         student.status = status;
         sync();
       }
     },
-    delete: (id: string) => {
+    delete: async (id: string) => {
       global.__db_state!.students = global.__db_state!.students.filter(s => s.id !== id);
       sync();
     },
-    update: (id: string, data: Partial<Student>) => {
+    update: async (id: string, data: Partial<Student>) => {
       const index = global.__db_state!.students.findIndex(s => s.id === id);
       if (index !== -1) {
         global.__db_state!.students[index] = { ...global.__db_state!.students[index], ...data };
@@ -230,8 +207,8 @@ export const db = {
     }
   },
   tutors: {
-    getAll: () => global.__db_state!.tutors,
-    add: (tutor: Omit<Tutor, 'id' | 'status' | 'createdAt' | 'availability'>) => {
+    getAll: async () => global.__db_state!.tutors,
+    add: async (tutor: Omit<Tutor, 'id' | 'status' | 'createdAt' | 'availability'>) => {
       const newTutor: Tutor = {
         ...tutor,
         id: Math.random().toString(36).substr(2, 9),
@@ -243,18 +220,18 @@ export const db = {
       sync();
       return newTutor;
     },
-    updateStatus: (id: string, status: Status) => {
+    updateStatus: async (id: string, status: Status) => {
       const tutor = global.__db_state!.tutors.find(t => t.id === id);
       if (tutor) {
         tutor.status = status;
         sync();
       }
     },
-    delete: (id: string) => {
+    delete: async (id: string) => {
       global.__db_state!.tutors = global.__db_state!.tutors.filter(t => t.id !== id);
       sync();
     },
-    update: (id: string, data: Partial<Tutor>) => {
+    update: async (id: string, data: Partial<Tutor>) => {
       const index = global.__db_state!.tutors.findIndex(t => t.id === id);
       if (index !== -1) {
         global.__db_state!.tutors[index] = { ...global.__db_state!.tutors[index], ...data };
@@ -263,21 +240,21 @@ export const db = {
     }
   },
   curricula: {
-    getAll: () => global.__db_state!.curricula,
-    add: (name: string) => {
+    getAll: async () => global.__db_state!.curricula,
+    add: async (name: string) => {
       const newCurriculum = { id: Math.random().toString(36).substr(2, 9), name };
       global.__db_state!.curricula.push(newCurriculum);
       sync();
       return newCurriculum;
     },
-    delete: (id: string) => {
+    delete: async (id: string) => {
       global.__db_state!.curricula = global.__db_state!.curricula.filter(c => c.id !== id);
       sync();
     }
   },
   chats: {
-    getAll: () => global.__db_state!.chats,
-    add: (chat: Omit<ChatMessage, 'id' | 'timestamp'>) => {
+    getAll: async () => global.__db_state!.chats,
+    add: async (chat: Omit<ChatMessage, 'id' | 'timestamp'>) => {
       const newChat: ChatMessage = {
         ...chat,
         id: Math.random().toString(36).substr(2, 9),
@@ -287,21 +264,21 @@ export const db = {
       sync();
       return newChat;
     },
-    reply: (id: string, reply: string) => {
+    reply: async (id: string, reply: string) => {
       const chat = global.__db_state!.chats.find(c => c.id === id);
       if (chat) {
         chat.adminReply = reply;
         sync();
       }
     },
-    delete: (id: string) => {
+    delete: async (id: string) => {
       global.__db_state!.chats = global.__db_state!.chats.filter(c => c.id !== id);
       sync();
     }
   },
   admin: {
-    getConfig: () => global.__db_state!.admin,
-    updatePassword: (newPasswordHash: string) => {
+    getConfig: async () => global.__db_state!.admin,
+    updatePassword: async (newPasswordHash: string) => {
       global.__db_state!.admin.passwordHash = newPasswordHash;
       sync();
     }
