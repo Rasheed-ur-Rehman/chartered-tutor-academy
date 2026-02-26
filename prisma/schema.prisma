@@ -1,0 +1,75 @@
+generator client {
+  provider = "prisma-client-js"
+   previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "postgresql"
+ 
+}
+
+// Your models (keep these exactly as they are)
+model Tutor {
+  id                String   @id @default(cuid())
+  fullName          String
+  gender            String
+  age               Int
+  contact           String
+  email             String   @unique
+  country           String?
+  city              String
+  qualification     String
+  experience        String
+  tuitionType       String[]
+  subject           String
+  profilePicture    String?
+  idCardFile        String?
+  qualificationFile String?
+  status            String   @default("pending")
+  availability      String   @default("Open")
+  createdAt         DateTime @default(now())
+
+  @@map("tutors")
+}
+
+model Student {
+  id          String   @id @default(cuid())
+  fullName    String
+  gender      String
+  contact     String
+  email       String   @unique
+  country     String?
+  city        String?
+  tuitionType String
+  grade       String
+  subject     String
+  status      String   @default("pending")
+  createdAt   DateTime @default(now())
+
+  @@map("students")
+}
+
+model Curriculum {
+  id   String @id @default(cuid())
+  name String @unique
+
+  @@map("curricula")
+}
+
+model ChatMessage {
+  id          String   @id @default(cuid())
+  userName    String
+  userEmail   String
+  userMessage String
+  adminReply  String?
+  timestamp   DateTime @default(now())
+
+  @@map("chats")
+}
+
+model Admin {
+  id           String @id @default("admin")
+  passwordHash String
+
+  @@map("admin")
+}

@@ -1,144 +1,116 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { Users, GraduationCap, Clock, MessageSquare, TrendingUp, CheckCircle2 } from 'lucide-react';
-import { Student, Tutor, ChatMessage } from '@/lib/db';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { Lock, AlertCircle } from 'lucide-react';
+import { motion } from 'motion/react';
 
-export default function AdminDashboardHome() {
-  const [stats, setStats] = useState({
-    totalStudents: 0,
-    totalTutors: 0,
-    pendingApprovals: 0,
-    recentMessages: 0
-  });
-  const [recentChats, setRecentChats] = useState<ChatMessage[]>([]);
+export default function AdminLoginPage() {
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(true); // Set to true by default
+  const router = useRouter();
 
-  const fetchData = useCallback(async () => {
+  // Remove any initialization check that might be causing the issue
+  useEffect(() => {
+    console.log('Login page mounted');
+    // Check if already logged in
+    const isAuth = localStorage.getItem('adminAuthenticated');
+    if (isAuth === 'true') {
+      router.push('/admin/dashboard');
+    }
+  }, [router]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError('');
+
     try {
-      const [studentsRes, tutorsRes, chatsRes] = await Promise.all([
-        fetch('/api/students'),
-        fetch('/api/tutors'),
-        fetch('/api/chats')
-      ]);
-
-      const students: Student[] = await studentsRes.json();
-      const tutors: Tutor[] = await tutorsRes.json();
-      const chats: ChatMessage[] = await chatsRes.json();
-
-      const pendingStudents = students.filter(s => s.status === 'pending').length;
-      const pendingTutors = tutors.filter(t => t.status === 'pending').length;
-
-      setStats({
-        totalStudents: students.length,
-        totalTutors: tutors.length,
-        pendingApprovals: pendingStudents + pendingTutors,
-        recentMessages: chats.length
+      console.log('Attempting login with password:', password);
+      
+      const res = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password })
       });
 
-      setRecentChats(chats.slice(-5).reverse());
-    } catch (error) {
-      console.error('Error fetching dashboard data:', error);
+      const data = await res.json();
+      console.log('Login response:', data);
+
+      if (res.ok) {
+        localStorage.setItem('adminAuthenticated', 'true');
+        document.cookie = 'adminAuthenticated=true; path=/';
+        router.push('/admin/dashboard');
+      } else {
+        setError(data.error || 'Invalid password');
+      }
+    } catch (err) {
+      console.error('Login error:', err);
+      setError('Connection error. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
-  }, []);
+  };
 
-  useEffect(() => {
-    setTimeout(() => fetchData(), 0);
-  }, [fetchData]);
-
-  const statCards = [
-    { name: 'Total Students', value: stats.totalStudents, icon: Users, color: 'bg-blue-500' },
-    { name: 'Total Tutors', value: stats.totalTutors, icon: GraduationCap, color: 'bg-indigo-500' },
-    { name: 'Pending Approvals', value: stats.pendingApprovals, icon: Clock, color: 'bg-amber-500' },
-    { name: 'Recent Messages', value: stats.recentMessages, icon: MessageSquare, color: 'bg-emerald-500' },
-  ];
+  // If not initialized, show nothing or a simple loading state
+  if (!isInitialized) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#001b52] mx-auto"></div>
+          <p className="mt-4 text-slate-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-10">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-800">Dashboard Overview</h1>
-        <p className="text-slate-500">Welcome back! Here&apos;s what&apos;s happening today.</p>
-      </div>
-
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {statCards.map((stat) => {
-          const Icon = stat.icon;
-          return (
-            <div key={stat.name} className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex items-center gap-5">
-              <div className={`${stat.color} p-4 rounded-2xl text-white`}>
-                <Icon size={24} />
-              </div>
-              <div>
-                <p className="text-sm font-medium text-slate-500">{stat.name}</p>
-                <p className="text-2xl font-bold text-slate-800">{stat.value}</p>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-        {/* Recent Messages */}
-        <div className="lg:col-span-2 bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
-          <div className="p-6 border-b border-slate-50 flex justify-between items-center">
-            <h2 className="font-bold text-slate-800">Recent Messages</h2>
-            <TrendingUp className="text-slate-400" size={20} />
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="max-w-md w-full bg-white rounded-[2.5rem] shadow-xl overflow-hidden"
+      >
+        <div className="bg-[#001b52] p-8 text-white text-center">
+          <div className="w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center mx-auto mb-4">
+            <Lock size={32} />
           </div>
-          <div className="divide-y divide-slate-50">
-            {recentChats.length > 0 ? recentChats.map((chat) => (
-              <div key={chat.id} className="p-6 hover:bg-slate-50 transition-colors">
-                <div className="flex justify-between items-start mb-2">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-[#001b52] font-bold text-xs uppercase">
-                      {chat.userName.substring(0, 2)}
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-sm text-slate-800">{chat.userName}</h4>
-                      <p className="text-xs text-slate-500">{chat.userEmail}</p>
-                    </div>
-                  </div>
-                  <span className="text-[10px] text-slate-400 font-medium">{new Date(chat.timestamp).toLocaleDateString()}</span>
-                </div>
-                <p className="text-sm text-slate-600 line-clamp-2 ml-13">{chat.userMessage}</p>
-              </div>
-            )) : (
-              <div className="p-10 text-center text-slate-400">
-                No recent messages
-              </div>
-            )}
-          </div>
+          <h1 className="text-2xl font-bold">Admin Login</h1>
+          <p className="text-white/70 text-sm mt-2">Enter your password to access the dashboard</p>
         </div>
 
-        {/* Quick Actions / Status */}
-        <div className="space-y-6">
-          <div className="bg-[#001b52] text-white p-8 rounded-3xl shadow-lg relative overflow-hidden">
-            <div className="relative z-10">
-              <h3 className="text-lg font-bold mb-2">System Status</h3>
-              <p className="text-white/70 text-sm mb-6">All systems are operational and running smoothly.</p>
-              <div className="flex items-center gap-2 text-emerald-400 text-sm font-bold">
-                <CheckCircle2 size={18} />
-                Operational
-              </div>
+        <form onSubmit={handleSubmit} className="p-8 space-y-6">
+          {error && (
+            <div className="p-4 bg-red-50 text-red-700 rounded-xl flex items-center gap-3 border border-red-100">
+              <AlertCircle size={20} />
+              <p className="text-sm font-medium">{error}</p>
             </div>
-            <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -mr-16 -mt-16" />
+          )}
+
+          <div className="space-y-2">
+            <label className="text-sm font-bold text-slate-700">Password</label>
+            <input
+              type="password"
+              required
+              placeholder="Enter admin password"
+              className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#001b52]/10 outline-none"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              disabled={isLoading}
+            />
           </div>
 
-          <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
-            <h3 className="font-bold text-slate-800 mb-6">Quick Links</h3>
-            <div className="space-y-3">
-              <button className="w-full text-left p-4 bg-slate-50 hover:bg-slate-100 rounded-xl text-sm font-medium text-slate-700 transition-colors">
-                Generate Monthly Report
-              </button>
-              <button className="w-full text-left p-4 bg-slate-50 hover:bg-slate-100 rounded-xl text-sm font-medium text-slate-700 transition-colors">
-                System Settings
-              </button>
-              <button className="w-full text-left p-4 bg-slate-50 hover:bg-slate-100 rounded-xl text-sm font-medium text-slate-700 transition-colors">
-                User Management
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
+          <button
+            type="submit"
+            disabled={isLoading}
+            className="w-full bg-[#001b52] text-white py-4 rounded-xl font-bold hover:bg-[#00143d] transition-all disabled:opacity-50"
+          >
+            {isLoading ? 'Verifying...' : 'Login'}
+          </button>
+        </form>
+      </motion.div>
     </div>
   );
 }

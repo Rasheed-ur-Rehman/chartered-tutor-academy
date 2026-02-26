@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { 
   LayoutDashboard, 
   Users, 
@@ -12,53 +12,60 @@ import {
   LogOut, 
   ShieldCheck,
   Menu,
-  X
+  X,
+  AlertCircle
 } from 'lucide-react';
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [password, setPassword] = useState('');
-  const [correctPassword, setCorrectPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const pathname = usePathname();
+  const router = useRouter();
 
-  useEffect(() => {
-    const fetchConfig = async () => {
-      try {
-        const res = await fetch('/api/admin/config');
-        const data = await res.json();
-        setCorrectPassword(data.password);
-      } catch (e) {
-        console.error('Failed to fetch admin config', e);
-      }
-    };
-    fetchConfig();
-  }, []);
-
-  const handleLogin = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!correctPassword) {
-      alert('System initializing, please try again in a moment.');
-      return;
-    }
-    if (password === correctPassword) {
-      setIsAuthenticated(true);
-      localStorage.setItem('admin_auth', 'true');
-    } else {
-      alert('Invalid password');
-    }
-  };
-
+  // Check authentication on mount
   useEffect(() => {
     const auth = localStorage.getItem('admin_auth');
     if (auth === 'true') {
-      setTimeout(() => setIsAuthenticated(true), 0);
+      setIsAuthenticated(true);
     }
   }, []);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError('');
+
+    try {
+      const res = await fetch('/api/admin/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password })
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setIsAuthenticated(true);
+        localStorage.setItem('admin_auth', 'true');
+        router.refresh(); // Refresh to update any server components
+      } else {
+        setError(data.error || 'Invalid password');
+      }
+    } catch (err) {
+      setError('Connection error. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('admin_auth');
     setIsAuthenticated(false);
+    setPassword('');
+    router.push('/admin');
   };
 
   if (!isAuthenticated) {
@@ -72,6 +79,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <h1 className="text-2xl font-bold text-[#001b52]">Admin Portal</h1>
             <p className="text-slate-500 text-sm">Please enter your password to continue</p>
           </div>
+          
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 text-red-700 rounded-xl flex items-center gap-2 text-sm border border-red-100">
+              <AlertCircle size={16} />
+              {error}
+            </div>
+          )}
+          
           <form onSubmit={handleLogin} className="space-y-6">
             <input
               type="password"
@@ -79,12 +94,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
               className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-[#001b52]/10 outline-none"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              disabled={isLoading}
             />
             <button
               type="submit"
-              className="w-full bg-[#001b52] text-white py-4 rounded-xl font-bold hover:bg-[#00143d] transition-colors"
+              disabled={isLoading}
+              className="w-full bg-[#001b52] text-white py-4 rounded-xl font-bold hover:bg-[#00143d] transition-colors disabled:opacity-50"
             >
-              Login
+              {isLoading ? 'Verifying...' : 'Login'}
             </button>
           </form>
         </div>
@@ -103,7 +120,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   return (
     <div className="min-h-screen bg-slate-50 flex">
-      {/* Sidebar */}
+      {/* Sidebar - same as before */}
       <aside className={`
         fixed inset-y-0 left-0 z-50 w-64 bg-[#001b52] text-white transition-transform duration-300 transform
         ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
